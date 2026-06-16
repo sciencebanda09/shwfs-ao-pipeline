@@ -1,4 +1,4 @@
-﻿<p align="center">
+<p align="center">
   <img src="results/dashboard_full.png" alt="BAH2026 AO Pipeline Dashboard" width="900"/>
 </p>
 
@@ -6,7 +6,7 @@
 
 <p align="center">
   <b>End-to-end Adaptive Optics simulation &amp; reconstruction pipeline</b><br>
-  Bharatiya Antariksh Hackathon 2026 Â· Challenge #9
+  Bharatiya Antariksh Hackathon 2026 · Challenge #9
 </p>
 
 <p align="center">
@@ -15,22 +15,21 @@
   <img src="https://img.shields.io/badge/Strehl-0.997-brightgreen?style=flat-square"/>
   <img src="https://img.shields.io/badge/Latency-0.3ms-brightgreen?style=flat-square"/>
   <img src="https://img.shields.io/badge/License-MIT-yellow?style=flat-square"/>
-  <img src="https://github.com/sciencebanda09/shwfs-ao-pipeline/actions/workflows/test.yml/badge.svg" alt="tests"/>
 </p>
 
 ---
 
 ## Overview
 
-A production-ready AO pipeline: raw Shack-Hartmann WFS frames â†’ wavefront reconstruction â†’ DM actuator commands â†’ **Strehl > 0.99** in closed loop.
+A production-ready AO pipeline: raw Shack-Hartmann WFS frames → wavefront reconstruction → DM actuator commands → **Strehl > 0.99** in closed loop.
 
 ```
-SH-WFS frames â†’ centroiding â†’ wavefront reconstruction â†’ DM actuator commands
-      â†“                              â†“                          â†“
+SH-WFS frames → centroiding → wavefront reconstruction → DM actuator commands
+      ↓                              ↓                          ↓
   (C ext, 0.1ms)         (SVD / MMSE / CNN-UNet)        (LQG controller)
-                                     â†“
+                                     ↓
                           LSTM temporal prediction
-                                     â†“
+                                     ↓
                           SLODAR turbulence profiling
 ```
 
@@ -38,10 +37,10 @@ SH-WFS frames â†’ centroiding â†’ wavefront reconstruction â†’ DM
 
 ## Results
 
-### Strehl Ratio â€” Predictive AO vs Closed Loop vs Open Loop
+### Strehl Ratio — Predictive AO vs Closed Loop vs Open Loop
 ![Strehl Ratio Time Series](results/demo_strehl_timeseries.png)
 
-### Reconstructed Wavefront Phase Maps (Real SH-WFS Data, râ‚€ = 0.534 m, Ï„â‚€ = 35.8 ms)
+### Reconstructed Wavefront Phase Maps (Real SH-WFS Data, r₀ = 0.534 m, τ₀ = 35.8 ms)
 ![Real Phase Maps](results/real_phase_maps.png)
 
 ---
@@ -55,7 +54,7 @@ SH-WFS frames â†’ centroiding â†’ wavefront reconstruction â†’ DM
 | Classical SVD | 0.9939 | 75.1 nm |
 | **CNN / UNet** | **0.9986** | **37.1 nm** |
 
-CNN/UNet delivers **2Ã— lower RMS WFE** vs classical SVD.
+CNN/UNet delivers **2× lower RMS WFE** vs classical SVD.
 
 ### Controller
 
@@ -65,7 +64,7 @@ CNN/UNet delivers **2Ã— lower RMS WFE** vs classical SVD.
 | LQG | 0.702 | 51.8 nm |
 | LQG + Predictive | 0.694 | 52.7 nm |
 
-### Speed (10Ã—10 subapertures)
+### Speed (10×10 subapertures)
 
 | Step | Method | Latency |
 |------|--------|---------|
@@ -73,9 +72,9 @@ CNN/UNet delivers **2Ã— lower RMS WFE** vs classical SVD.
 | Centroiding | **C extension** | **~0.1 ms** |
 | Wavefront reconstruction | NumPy matmul (precomputed SVD) | ~0.1 ms |
 | Actuator commands | Influence matrix matmul | ~0.1 ms |
-| **Total** | **C centroid + NumPy recon** | **~0.3 ms âœ“** |
+| **Total** | **C centroid + NumPy recon** | **~0.3 ms ✓** |
 
-Target: < 10 ms to track Ï„â‚€ ~ 5â€“20 ms. **Achieved: 0.3 ms.**
+Target: < 10 ms to track τ₀ ~ 5–20 ms. **Achieved: 0.3 ms.**
 
 ---
 
@@ -83,23 +82,23 @@ Target: < 10 ms to track Ï„â‚€ ~ 5â€“20 ms. **Achieved: 0.3 ms.**
 
 ```
 shwfs-ao-pipeline/
-â”œâ”€â”€ config.yaml               # all tunable parameters
-â”œâ”€â”€ pipeline.py               # end-to-end runner: sim/train/eval/demo/genbmp/real
-â”œâ”€â”€ Makefile
-â”œâ”€â”€ requirements.txt
-â”œâ”€â”€ sim/                      # atmosphere, SH-WFS, noise, scintillation, dataset gen
-â”œâ”€â”€ reconstruction/           # Zernike basis, SVD, MMSE/Bayesian, CNN/UNet
-â”œâ”€â”€ profiling/                # SLODAR CnÂ²(h) profiler, temporal PSD / Ï„â‚€
-â”œâ”€â”€ control/                  # LQG (Kalman + LQR) controller
-â”œâ”€â”€ actuator/                 # DM geometry, influence functions, command generation
-â”œâ”€â”€ temporal/                 # LSTM/Transformer prediction, turbulence parameter estimation
-â”œâ”€â”€ viz/                      # matplotlib + Plotly/Dash dashboard
-â”œâ”€â”€ tests/                    # pytest unit tests
-â”œâ”€â”€ notebooks/                # demo and benchmark notebooks
-â”œâ”€â”€ data/                     # datasets (git-ignored)
-â”‚   â””â”€â”€ synthetic_bmp/        # 200 synthetic SH-WFS BMP frames
-â”œâ”€â”€ models/                   # trained model checkpoints (git-ignored)
-â””â”€â”€ results/                  # benchmark CSVs, timing, plots
+├── config.yaml               # all tunable parameters
+├── pipeline.py               # end-to-end runner: sim/train/eval/demo/genbmp/real
+├── Makefile
+├── requirements.txt
+├── sim/                      # atmosphere, SH-WFS, noise, scintillation, dataset gen
+├── reconstruction/           # Zernike basis, SVD, MMSE/Bayesian, CNN/UNet
+├── profiling/                # SLODAR Cn²(h) profiler, temporal PSD / τ₀
+├── control/                  # LQG (Kalman + LQR) controller
+├── actuator/                 # DM geometry, influence functions, command generation
+├── temporal/                 # LSTM/Transformer prediction, turbulence parameter estimation
+├── viz/                      # matplotlib + Plotly/Dash dashboard
+├── tests/                    # pytest unit tests
+├── notebooks/                # demo and benchmark notebooks
+├── data/                     # datasets (git-ignored)
+│   └── synthetic_bmp/        # 200 synthetic SH-WFS BMP frames
+├── models/                   # trained model checkpoints (git-ignored)
+└── results/                  # benchmark CSVs, timing, plots
 ```
 
 ---
@@ -116,7 +115,7 @@ make demo     # short closed-loop demo + live dashboard
 make test     # pytest unit tests
 ```
 
-### Optional: C Centroiding Extension (80Ã— speedup)
+### Optional: C Centroiding Extension (80× speedup)
 
 ```bash
 cd c_ext && pip install -e .
@@ -131,11 +130,11 @@ Auto-detected at runtime. Falls back to Python CoG without it.
 | Parameter | Value |
 |-----------|-------|
 | Aperture diameter | 0.5 m |
-| Subapertures | 10 Ã— 10 |
+| Subapertures | 10 × 10 |
 | Zernike modes | 36 |
 | DM actuators | 97 (hexagonal) |
-| Turbulence model | Von KÃ¡rmÃ¡n, 3 layers |
-| râ‚€ | 0.15 m |
+| Turbulence model | Von Kármán, 3 layers |
+| r₀ | 0.15 m |
 | Simulation timestep | 1 ms |
 | Frames per dataset | 500 |
 
@@ -171,10 +170,10 @@ python3 pipeline.py --config config.yaml --mode real \
     --bmp_dir /path/to/bmp_frames/ \
     --reference /path/to/flat_reference.bmp
 
-# Outputs â†’ results/
-#   real_reconstruction.npz  â€” zernike_coeffs, phase_maps, actuator_maps_m,
+# Outputs → results/
+#   real_reconstruction.npz  — zernike_coeffs, phase_maps, actuator_maps_m,
 #                               actuator_maps_um, r0_m, tau0_s, tau0_direct_s
-#   real_phase_maps.png       â€” first 3 reconstructed wavefront phase maps
+#   real_phase_maps.png       — first 3 reconstructed wavefront phase maps
 ```
 
 BMP loader handles: auto-discovery, CoG/wCoG centroiding, background subtraction, flat reference normalisation, auto-resize, and C extension auto-detection.
@@ -183,7 +182,7 @@ BMP loader handles: auto-discovery, CoG/wCoG centroiding, background subtraction
 
 ## Theory
 
-### Wavefront Sensing â€” Slope Measurement
+### Wavefront Sensing — Slope Measurement
 
 Each subaperture measures the mean gradient of the incoming wavefront $\phi(x,y)$ over its area $\mathcal{A}_i$:
 
@@ -197,7 +196,7 @@ where $f_{\text{lens}}$ is the microlens focal length and $\lambda$ is the wavel
 
 ---
 
-### Centroiding â€” Centre of Gravity
+### Centroiding — Centre of Gravity
 
 For spot intensity $I(x,y)$ after background subtraction $I' = \max(I - B, 0)$:
 
@@ -211,7 +210,7 @@ $$w(r,c) = \exp\!\left(-\frac{(r - r_{\text{peak}})^2 + (c - c_{\text{peak}})^2}
 
 ---
 
-### Modal Wavefront Reconstruction â€” SVD
+### Modal Wavefront Reconstruction — SVD
 
 Wavefront expressed as a sum of $J$ Zernike modes:
 
@@ -257,7 +256,7 @@ $$R_n^m(\rho) = \sum_{k=0}^{(n-m)/2} \frac{(-1)^k\,(n-k)!}{k!\,\bigl(\frac{n+m}{
 
 ---
 
-### Fried Parameter â€” râ‚€ Estimation
+### Fried Parameter — r₀ Estimation
 
 From Noll (1976), variance of Zernike coefficient $a_j$ under Kolmogorov turbulence:
 
@@ -269,9 +268,9 @@ $$\hat{r}_0 = \exp\!\left(-\frac{3}{5}\,\frac{1}{J-3}\sum_{j=4}^{J} \log\frac{\s
 
 ---
 
-### Coherence Time â€” Ï„â‚€
+### Coherence Time — τ₀
 
-Von KÃ¡rmÃ¡n temporal PSD of Zernike mode $j$ under frozen-flow:
+Von Kármán temporal PSD of Zernike mode $j$ under frozen-flow:
 
 $$S_j(f) = \sigma_j^2 \left(f^2 + f_g^2\right)^{-11/6}$$
 
@@ -279,7 +278,7 @@ Per-mode coherence time from knee frequency fit:
 
 $$\tau_0(j) = \frac{1}{f_g(j)}$$
 
-System coherence time â€” median over higher-order modes ($j \geq 4$):
+System coherence time — median over higher-order modes ($j \geq 4$):
 
 $$\tau_0 = \underset{j \geq 4}{\mathrm{median}}\;\tau_0(j)$$
 
@@ -307,7 +306,7 @@ Influence matrix $\mathbf{H} \in \mathbb{R}^{N^2 \times N_{\text{act}}}$ has col
 
 ---
 
-### Actuator Commands â€” Conjugate Wavefront
+### Actuator Commands — Conjugate Wavefront
 
 For a reflective DM, surface displacement $d$ produces optical path change $2d$:
 
@@ -325,7 +324,7 @@ $$v_k^{(\mu\text{m})} = v_k^{(\text{m})} \times 10^6$$
 
 ### Fried Geometry
 
-DM actuators placed at **corners** of the subaperture grid â€” $(N_s + 1) \times (N_s + 1)$ square lattice. For $N_s = 10$: 121 corner positions, active actuators = those within the unit circle.
+DM actuators placed at **corners** of the subaperture grid — $(N_s + 1) \times (N_s + 1)$ square lattice. For $N_s = 10$: 121 corner positions, active actuators = those within the unit circle.
 
 Each actuator corrects the average tilt seen by the four surrounding subapertures, minimising aliasing between sensing and correction grids.
 
@@ -361,22 +360,23 @@ $$\mathbf{K}_t = \mathbf{P}_{t|t-1}\,\mathbf{D}^\top\!\left(\mathbf{D}\,\mathbf{
 
 ### Strehl Ratio
 
-MarÃ©chal approximation (valid for $\sigma_\phi \lesssim 1\,\text{rad}$):
+Maréchal approximation (valid for $\sigma_\phi \lesssim 1\,\text{rad}$):
 
 $$\mathcal{S} \approx e^{-\sigma_\phi^2}$$
 
-where $\sigma_\phi^2 = \langle \phi_{\text{residual}}^2 \rangle$ is residual wavefront variance in radÂ².
+where $\sigma_\phi^2 = \langle \phi_{\text{residual}}^2 \rangle$ is residual wavefront variance in rad².
 
 ---
 
 ## Notebooks
 
-| Notebook | Contents | Launch |
-|----------|----------|--------|
-| `01_sim_demo.ipynb` | Turbulence sim, SH-WFS propagation, noise | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/sciencebanda09/shwfs-ao-pipeline/blob/main/notebooks/01_sim_demo.ipynb) |
-| `02_reconstruction_benchmark.ipynb` | CNN/UNet training, benchmark vs classical | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/sciencebanda09/shwfs-ao-pipeline/blob/main/notebooks/02_reconstruction_benchmark.ipynb) |
-| `03_temporal_prediction.ipynb` | LSTM prediction, closed-loop sim, turbulence parameter estimation | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/sciencebanda09/shwfs-ao-pipeline/blob/main/notebooks/03_temporal_prediction.ipynb) |
-| `04_phd_extensions.ipynb` | MMSE, Noll validation, SLODAR, mode-dependent τ₀, LQG vs integrator | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/sciencebanda09/shwfs-ao-pipeline/blob/main/notebooks/04_phd_extensions.ipynb) |
+| Notebook | Contents |
+|----------|----------|
+| `01_sim_demo.ipynb` | Turbulence sim, SH-WFS propagation, noise |
+| `02_reconstruction_benchmark.ipynb` | CNN/UNet training, benchmark vs classical |
+| `03_temporal_prediction.ipynb` | LSTM prediction, closed-loop sim, turbulence parameter estimation |
+| `04_phd_extensions.ipynb` | MMSE, Noll validation, SLODAR, mode-dependent τ₀, LQG vs integrator, uncertainty-gated AO |
+
 ---
 
 ## Evaluation Criteria
@@ -385,10 +385,10 @@ where $\sigma_\phi^2 = \langle \phi_{\text{residual}}^2 \rangle$ is residual wav
 |-----------|---------------|----------|
 | Wavefront phase maps $W(x_i, y_i)$ | ModalReconstructor + Zernike basis | `reconstruction/classical.py`, `reconstruction/zernike.py` |
 | Fried parameter $r_0$ | Noll variance fit, modes $j \geq 4$ | `temporal/turbulence_param.py` |
-| Coherence time $\tau_0$ | Von KÃ¡rmÃ¡n PSD fit, median over higher-order modes | `profiling/temporal_psd.py` |
-| Actuator maps $A(x_i, y_i)$ in Âµm stroke | Influence matrix pseudo-inverse + stroke clip | `actuator/dm_command.py` |
+| Coherence time $\tau_0$ | Von Kármán PSD fit, median over higher-order modes | `profiling/temporal_psd.py` |
+| Actuator maps $A(x_i, y_i)$ in µm stroke | Influence matrix pseudo-inverse + stroke clip | `actuator/dm_command.py` |
 | Inter-actuator coupling | Gaussian IF, $c_{\text{coup}} = 0.3$ | `actuator/influence_fn.py` |
-| Fried geometry | Actuators at subaperture corners | `actuator/dm_command.py` â†’ `build_fried_geometry()` |
+| Fried geometry | Actuators at subaperture corners | `actuator/dm_command.py` → `build_fried_geometry()` |
 | Algorithm speed < 10 ms | C CoG + precomputed SVD matmul | `c_ext/centroid_cog.c` |
 | Real BMP ingestion | RealSHWFSLoader | `data/load_real_frames.py` |
 | Synthetic test data | Physically correct BMP generator | `sim/generate_bmp_frames.py` |
@@ -399,8 +399,7 @@ where $\sigma_\phi^2 = \langle \phi_{\text{residual}}^2 \rangle$ is residual wav
 
 - Roddier, F. (1999). *Adaptive Optics in Astronomy*. Cambridge University Press.
 - Hardy, J. W. (1998). *Adaptive Optics for Astronomical Telescopes*. Oxford University Press.
-- Noll, R. J. (1976). Zernike polynomials and atmospheric turbulence. *JOSA*, 66(3), 207â€“211.
+- Noll, R. J. (1976). Zernike polynomials and atmospheric turbulence. *JOSA*, 66(3), 207–211.
 - Fusco, T., et al. (2004). Optimal wavefront reconstruction for MCAO. *JOSA A*, 18(10).
-- VÃ©ran, J.-P., et al. (1997). Estimation of AO long-exposure PSF from control loop data. *JOSA A*, 14(11).
+- Véran, J.-P., et al. (1997). Estimation of AO long-exposure PSF from control loop data. *JOSA A*, 14(11).
 - Wiberg, D. M., et al. (2004). LQG vs explicit predictive control of AO systems. *Proc. SPIE*.
-
