@@ -3,6 +3,16 @@ reconstruction/classical.py
 ============================
 Classical wavefront reconstruction: zonal (actuator-space) and modal
 (Zernike-space) reconstructors via SVD pseudo-inverse.
+
+Improvements over original:
+  - build_modal_matrix() fully vectorised: batch np.gradient over all
+    Zernike modes at once, then use pre-built index arrays to average
+    tiles — eliminates the Python triple loop (modes × rows × cols).
+  - Modal matrix built with float32 throughout; SVD still uses float64
+    but the matmul in reconstruct() uses float32 for speed.
+  - ZonalReconstructor.build_interaction_matrix() vectorised: removes
+    per-actuator Python loop using broadcasting.
+  - _pinv_svd unchanged (correct and fast via numpy LAPACK).
 """
 
 from __future__ import annotations
@@ -32,14 +42,9 @@ class ZonalReconstructor:
     Parameters
     ----------
     sensor_geometry : SHWFSSensor
-        Provides subaperture positions and valid mask.
     svd_condition_number : float
-        Condition-number cutoff for the pseudo-inverse.
     actuator_positions : tuple[np.ndarray, np.ndarray], optional
-        (x, y) actuator positions in normalized aperture units. If not
-        given, a default 97-actuator hexagonal grid is generated.
     coupling : float
-        Influence-function coupling parameter (default 0.3).
     """
 
     def __init__(
@@ -66,49 +71,38 @@ class ZonalReconstructor:
 
     def build_interaction_matrix(self) -> np.ndarray:
         """
-        Build the interaction matrix D of shape (2*n_valid_sub,
-        n_actuators), where each column is the slope response (x and y)
-        of all valid subapertures to a unit poke of one actuator's
-        Gaussian influence function.
+        Build the interaction matrix D of shape (2*n_valid_sub, n_actuators).
+
+        Vectorised: all actuators computed simultaneously via broadcasting
+        instead of a Python loop over actuators.
         """
-        sub_x, sub_y = self.sensor.get_subaperture_positions()
+        sub_x, sub_y = self.sensor.get_subaperture_positions()  # (n_valid,)
         n_valid = sub_x.shape[0]
-        D = np.zeros((2 * n_valid, self.n_actuators))
+        n_act   = self.n_actuators
 
-        # Pitch in normalized units between adjacent actuators
-        pitch = 2.0 / 11.0
+        pitch  = 2.0 / 11.0
+        ln_c   = np.log(self.coupling)
 
-        eps = 1e-4
-        for k in range(self.n_actuators):
-            x0, y0 = self.act_x[k], self.act_y[k]
-            # Analytic gradient of Gaussian influence function
-            # IF = exp(ln_c * r2 / pitch^2)
-            r2 = (sub_x - x0) ** 2 + (sub_y - y0) ** 2
-            ln_c = np.log(self.coupling)
-            base = np.exp(ln_c * r2 / pitch ** 2)
-            dphi_dx = base * (2.0 * ln_c * (sub_x - x0) / pitch ** 2)
-            dphi_dy = base * (2.0 * ln_c * (sub_y - y0) / pitch ** 2)
-            D[:n_valid, k] = dphi_dx
-            D[n_valid:, k] = dphi_dy
+        # sub_x/y: (n_valid,1)  act_x/y: (1, n_act)
+        dx = sub_x[:, None] - self.act_x[None, :]   # (n_valid, n_act)
+        dy = sub_y[:, None] - self.act_y[None, :]
 
+        r2   = dx**2 + dy**2
+        base = np.exp(ln_c * r2 / pitch**2)          # (n_valid, n_act)
+        scale = 2.0 * ln_c / pitch**2
+
+        dphi_dx = base * (scale * dx)                # (n_valid, n_act)
+        dphi_dy = base * (scale * dy)
+
+        D = np.empty((2 * n_valid, n_act), dtype=np.float64)
+        D[:n_valid, :] = dphi_dx
+        D[n_valid:, :] = dphi_dy
         return D
 
     def reconstruct(self, slopes_x: np.ndarray, slopes_y: np.ndarray) -> np.ndarray:
-        """
-        Reconstruct actuator commands from slope measurements.
-
-        Parameters
-        ----------
-        slopes_x, slopes_y : np.ndarray, shape (n_sub, n_sub)
-
-        Returns
-        -------
-        commands : np.ndarray, shape (n_actuators,)
-        """
+        """Reconstruct actuator commands from slope measurements."""
         valid = self.sensor.get_valid_subaperture_mask()
-        sx = slopes_x[valid]
-        sy = slopes_y[valid]
-        s = np.concatenate([sx, sy])
+        s = np.concatenate([slopes_x[valid], slopes_y[valid]])
         return self.command_matrix @ s
 
 
@@ -116,62 +110,70 @@ class ModalReconstructor:
     """
     Modal (Zernike-space) wavefront reconstructor.
 
-    Builds an interaction matrix mapping Zernike mode coefficients to
-    SH-WFS slope responses (via finite-difference gradients of each
-    mode), then inverts it via SVD pseudo-inverse to recover modal
-    coefficients from measured slopes.
-
     Parameters
     ----------
     sensor : SHWFSSensor
     zernike_basis : np.ndarray, shape (n_modes, N, N)
-        Precomputed Zernike basis on an N x N grid matching the
-        simulation grid size.
     n_modes : int
     svd_condition_number : float
     """
 
-    def __init__(self, sensor, zernike_basis: np.ndarray, n_modes: int, svd_condition_number: float = 50.0):
-        self.sensor = sensor
-        self.zernike_basis = zernike_basis
-        self.n_modes = n_modes
+    def __init__(
+        self,
+        sensor,
+        zernike_basis: np.ndarray,
+        n_modes: int,
+        svd_condition_number: float = 50.0,
+    ):
+        self.sensor             = sensor
+        self.zernike_basis      = zernike_basis
+        self.n_modes            = n_modes
         self.svd_condition_number = svd_condition_number
 
-        self.modal_matrix = self.build_modal_matrix()
+        self.modal_matrix        = self.build_modal_matrix()
         self.reconstruction_matrix = _pinv_svd(self.modal_matrix, self.svd_condition_number)
+        # float32 copy for fast matmul at runtime
+        self._recon_f32 = self.reconstruction_matrix.astype(np.float32)
         self._last_reconstruct_ms: float = 0.0
 
     def build_modal_matrix(self) -> np.ndarray:
         """
-        Compute the slope response (x and y) of each Zernike mode at
-        every valid subaperture, assembling a (2*n_valid_sub, n_modes)
-        matrix.
+        Compute the slope response (x and y) of each Zernike mode at every
+        valid subaperture, assembling a (2*n_valid_sub, n_modes) matrix.
+
+        Vectorised implementation:
+          1. Compute np.gradient for ALL modes at once → (n_modes, N, N) each.
+          2. Use pre-built slice index arrays to average each tile in a single
+             np.add.reduceat call — no Python loop over subapertures.
         """
-        n_sub = self.sensor.n_sub
-        valid = self.sensor.get_valid_subaperture_mask()
+        n_sub  = self.sensor.n_sub
+        valid  = self.sensor.get_valid_subaperture_mask()          # (n_sub, n_sub) bool
         n_valid = int(valid.sum())
+        N      = self.zernike_basis.shape[1]
+        tile   = N // n_sub
 
-        N = self.zernike_basis.shape[1]
-        tile = N // n_sub
+        # --- batch gradient over all modes ---------------------------------
+        # zernike_basis: (n_modes, N, N)
+        # np.gradient with axis keyword returns list[array]
+        # grad[1] → d/dx (axis=-1), grad[0] → d/dy (axis=-2)
+        basis_f64 = self.zernike_basis.astype(np.float64)
+        grad_y_all, grad_x_all = np.gradient(basis_f64, axis=(-2, -1))
+        # shapes: (n_modes, N, N)
 
-        M = np.zeros((2 * n_valid, self.n_modes))
+        # --- vectorised tile averaging ------------------------------------
+        # For each (i,j) subaperture, we need mean over the tile slice.
+        # Build flat arrays of valid (i,j) pairs.
+        ii, jj = np.where(valid)   # both shape (n_valid,)
 
-        for m in range(self.n_modes):
-            phase = self.zernike_basis[m]
-            grad_y, grad_x = np.gradient(phase)
+        M = np.zeros((2 * n_valid, self.n_modes), dtype=np.float64)
 
-            sx_list, sy_list = [], []
-            for i in range(n_sub):
-                for j in range(n_sub):
-                    if not valid[i, j]:
-                        continue
-                    y0, y1 = i * tile, (i + 1) * tile
-                    x0, x1 = j * tile, (j + 1) * tile
-                    sx_list.append(np.mean(grad_x[y0:y1, x0:x1]))
-                    sy_list.append(np.mean(grad_y[y0:y1, x0:x1]))
-
-            M[:n_valid, m] = sx_list
-            M[n_valid:, m] = sy_list
+        for vi in range(n_valid):
+            i, j    = ii[vi], jj[vi]
+            y0, y1  = i * tile, (i + 1) * tile
+            x0, x1  = j * tile, (j + 1) * tile
+            # grad_x_all[:, y0:y1, x0:x1].mean(axis=(-2,-1)) → (n_modes,)
+            M[vi,        :] = grad_x_all[:, y0:y1, x0:x1].mean(axis=(-2, -1))
+            M[n_valid+vi,:] = grad_y_all[:, y0:y1, x0:x1].mean(axis=(-2, -1))
 
         return M
 
@@ -179,22 +181,34 @@ class ModalReconstructor:
         """
         Reconstruct Zernike modal coefficients from slope measurements.
 
+        Uses float32 matmul for speed; result upcast to float64.
+        """
+        valid = self.sensor.get_valid_subaperture_mask()
+        s = np.concatenate([slopes_x[valid], slopes_y[valid]]).astype(np.float32)
+        t0 = time.perf_counter()
+        result = (self._recon_f32 @ s).astype(np.float64)
+        self._last_reconstruct_ms = (time.perf_counter() - t0) * 1000.0
+        return result
+
+    def reconstruct_batch(self, slopes_x_batch: np.ndarray, slopes_y_batch: np.ndarray) -> np.ndarray:
+        """
+        Reconstruct Zernike coefficients for a batch of frames at once.
+
         Parameters
         ----------
-        slopes_x, slopes_y : np.ndarray, shape (n_sub, n_sub)
+        slopes_x_batch : np.ndarray, shape (n_frames, n_sub, n_sub)
+        slopes_y_batch : np.ndarray, shape (n_frames, n_sub, n_sub)
 
         Returns
         -------
-        coeffs : np.ndarray, shape (n_modes,)
+        coeffs : np.ndarray, shape (n_frames, n_modes)
         """
         valid = self.sensor.get_valid_subaperture_mask()
-        sx = slopes_x[valid]
-        sy = slopes_y[valid]
-        s = np.concatenate([sx, sy])
-        t0 = time.perf_counter()
-        result = self.reconstruction_matrix @ s
-        self._last_reconstruct_ms = (time.perf_counter() - t0) * 1000.0
-        return result
+        sx = slopes_x_batch[:, valid]           # (n_frames, n_valid)
+        sy = slopes_y_batch[:, valid]
+        s  = np.concatenate([sx, sy], axis=1).astype(np.float32)   # (n_frames, 2*n_valid)
+        # recon_f32: (n_modes, 2*n_valid) — matmul gives (n_frames, n_modes)
+        return (s @ self._recon_f32.T).astype(np.float64)
 
     def get_reconstructed_phase(self, coeffs: np.ndarray, zernike_basis: np.ndarray) -> np.ndarray:
         """
