@@ -46,7 +46,6 @@ models/*.pkl
 !models/*.history.json
 
 # --- Results / outputs ---
-results/
 !results/.gitkeep
 
 # --- C extension build artefacts ---
@@ -93,4 +92,3 @@ htmlcov/
 secrets.yaml
 *.key
 
-results/*.npz
