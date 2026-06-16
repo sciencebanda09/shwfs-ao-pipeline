@@ -92,3 +92,5 @@ htmlcov/
 .env.local
 secrets.yaml
 *.key
+
+results/*.npz
