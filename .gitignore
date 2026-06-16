@@ -1,0 +1,94 @@
+# =============================================================================
+# BAH2026 AO Pipeline — .gitignore
+# =============================================================================
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.so
+*.dylib
+
+# --- Virtual environments ---
+.venv/
+venv/
+env/
+.env
+
+# --- Jupyter ---
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# --- Data (large / generated) ---
+data/*.h5
+data/*.hdf5
+data/*.npz
+data/*.npy
+data/synthetic_bmp/*.bmp
+!data/.gitkeep
+
+# --- Real ISRO frames (never commit) ---
+data/real_bmp/
+data/isro_frames/
+
+# --- Trained models (large binaries) ---
+models/*.pt
+models/*.pth
+models/*.onnx
+models/*.pkl
+!models/.gitkeep
+!models/*.history.json
+
+# --- Results / outputs ---
+results/
+!results/.gitkeep
+
+# --- C extension build artefacts ---
+c_ext/build/
+c_ext/*.egg-info/
+c_ext/*.so
+c_ext/*.c.bak
+
+# --- uv / pip lockfiles (keep uv.lock if you use uv, ignore pip internals) ---
+uv-*.lock
+pip-*.lock
+*.lock.tmp
+
+# --- rclone ---
+rclone-mount-config.json
+rclone-mounts/
+
+# --- JVM / profiling junk (from unzip artefacts) ---
+hsperfdata_*/
+node-compile-cache/
+phantomjs/
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Editors ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.ropeproject/
+
+# --- Coverage / test artefacts ---
+.coverage
+.pytest_cache/
+htmlcov/
+*.log
+
+# --- Secrets ---
+.env.local
+secrets.yaml
+*.key
