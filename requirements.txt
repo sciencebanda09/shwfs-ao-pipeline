@@ -1,0 +1,16 @@
+numpy>=1.24
+scipy>=1.10
+matplotlib>=3.7
+plotly>=5.15
+dash>=2.11
+h5py>=3.9
+torch>=2.0
+torchvision>=0.15
+scikit-learn>=1.3
+pandas>=2.0
+tqdm>=4.65
+pyyaml>=6.0
+aotools>=1.0.5
+pytest>=7.4
+jupyter>=1.0
+control>=0.9

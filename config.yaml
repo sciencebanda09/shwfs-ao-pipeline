@@ -1,0 +1,90 @@
+# =============================================================================
+# BAH2026 - AO Pipeline configuration
+# All tunable parameters for the adaptive optics simulation, reconstruction,
+# control, profiling and temporal-prediction stack.
+# =============================================================================
+
+sim:
+  aperture_diameter_m: 0.5
+  wavelength_m: 550.0e-9
+  n_subapertures: 10
+  mla_pitch_m: 0.05            # = aperture_diameter_m / n_subapertures
+  focal_length_m: 0.02
+  detector_pixels_per_subaperture: 8
+  n_zernike: 36
+  n_frames: 500
+  dt_s: 0.001
+  grid_size: 128                # N x N phase-screen grid
+
+turbulence:
+  model: "von_karman"          # "kolmogorov" | "von_karman"
+  r0_m: 0.15
+  L0_m: 25.0
+  n_layers: 3
+  layer_altitudes_m: [0, 5000, 10000]
+  layer_cn2_weights: [0.6, 0.3, 0.1]
+  layer_wind_speeds_ms: [8.0, 15.0, 25.0]
+  layer_wind_directions_deg: [45, 90, 135]
+
+noise:
+  photon_noise: true
+  readout_noise_e: 3.0
+  flux_photons_per_frame: 1000
+  centroiding_method: "cog"     # "cog" | "wcog"
+
+reconstruction:
+  classical_method: "svd"
+  svd_condition_number: 50
+  cnn_architecture: "UNet"      # "UNet" | "CNN"
+  cnn_input_channels: 2
+  cnn_output_size: 36
+  learning_rate: 1.0e-3
+  batch_size: 32
+  n_epochs: 50
+  train_split: 0.8
+
+actuator:
+  n_actuators: 97
+  geometry: "hexagonal"         # "hexagonal" | "square"
+  coupling: 0.3
+  stroke_limit_um: 5.0
+
+temporal:
+  model: "lstm"                 # "lstm" | "transformer"
+  hidden_size: 128
+  n_layers: 2
+  sequence_length: 20
+  predict_horizon: 1
+  learning_rate: 1.0e-3
+  batch_size: 16
+  n_epochs: 30
+
+paths:
+  data_dir: "data/"
+  models_dir: "models/"
+  results_dir: "results/"
+
+bayesian:
+  alpha_regularization: 1.0
+  use_kolmogorov_prior: true
+  noise_covariance: "white"     # "white" | "learned"
+  learned_noise_cov: false
+
+slodar:
+  n_stars: 2
+  star_separation_arcsec: 10.0
+  n_altitude_bins: 10
+  cross_corr_method: "fft"
+
+lqg:
+  process_noise_q: 1.0e-4
+  measurement_noise_r: 1.0e-3
+  lqr_state_weight: 1.0
+  lqr_control_weight: 0.1
+
+uncertainty:
+  enable_mc_dropout: true
+  n_mc_samples: 20
+  uncertainty_threshold: 0.5
+
+control_method: "integrator"    # "integrator" | "lqg"
