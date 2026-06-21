@@ -207,6 +207,11 @@ class TurbulenceLayer:
         self.wind_speed = wind_speed
         self.wind_direction = wind_direction
         self._residual_shift = np.array([0.0, 0.0])
+        self._seed = seed
+        self._N = N
+        self._pixel_scale = pixel_scale
+        self._r0 = r0
+        self._L0 = L0
 
         self.phase = generate_phase_screen(
             N, pixel_scale, r0, L0, model="von_karman", seed=seed
@@ -307,6 +312,15 @@ class MultiLayerAtmosphere:
         for layer in self.layers:
             layer.evolve(dt)
 
+    def reset(self) -> None:
+        """Reset phase screens to initial state (re-seed from original seed)."""
+        for layer in self.layers:
+            layer._residual_shift = np.array([0.0, 0.0])
+            layer.phase = generate_phase_screen(
+                layer._N, layer._pixel_scale, layer._r0, layer._L0,
+                model="von_karman", seed=layer._seed,
+            )
+
 
 @dataclass
 class AtmosphereParams:
@@ -346,12 +360,3 @@ def build_atmosphere_from_config(config: dict, N: int, pixel_scale: float, seed:
     return MultiLayerAtmosphere(
         layers_config, N=N, pixel_scale=pixel_scale, wavelength_m=sim_cfg["wavelength_m"]
     )
-
-    def reset(self) -> None:
-        """Reset phase screens to initial state (re-seed from original seed)."""
-        for layer in self.layers:
-            if hasattr(layer, '_seed') and layer._seed is not None:
-                rng = np.random.default_rng(layer._seed)
-                layer.phase_screen = rng.standard_normal(layer.phase_screen.shape).astype(np.float32)
-            else:
-                layer.phase_screen = np.zeros_like(layer.phase_screen)
