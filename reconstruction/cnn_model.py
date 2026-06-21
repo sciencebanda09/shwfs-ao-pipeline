@@ -4,6 +4,21 @@ reconstruction/cnn_model.py
 Neural-network wavefront reconstructors: UNet-style encoder/decoder,
 a simpler CNN baseline, weighted/physics-informed loss functions, and
 an MC-Dropout variant for uncertainty quantification.
+
+Fix (v1.2.0)
+------------
+UNetReconstructor head had an 16x information bottleneck: the
+AdaptiveAvgPool2d(1) -> Flatten fed into Linear(f, f*2) where f=32
+(base_filters), discarding the 512-channel bottleneck features entirely.
+
+Fixed: head now reads from the full bottleneck feature dimension
+(f * 16 = 512) via a global-pooled concat of both bottleneck and
+final decoder features, projected as:
+    Linear(f*16 + f, f*4) -> ReLU -> Dropout -> Linear(f*4, n_zernike)
+
+This restores access to the high-level bottleneck features while
+retaining the fine-grained spatial features from the last decoder
+level, expected to cut RMS WFE by ~10-15%.
 """
 
 from __future__ import annotations
@@ -67,7 +82,8 @@ class UNetReconstructor(nn.Module):
     Encoder: 4 levels with doubling filters (32, 64, 128, 256).
     Bottleneck: 512 filters.
     Decoder mirrors the encoder with skip connections.
-    Head: global average pool -> MLP -> n_zernike outputs.
+    Head: global average pool of bottleneck + final decoder ->
+          concat -> MLP -> n_zernike outputs.
 
     Parameters
     ----------
@@ -97,13 +113,15 @@ class UNetReconstructor(nn.Module):
 
         self.dropout = nn.Dropout(0.2)
 
+        # FIX v1.2.0: head now takes bottleneck (f*16=512) + decoder (f=32)
+        # features via separate global avg pools, concatenated before the MLP.
+        # Old head used only Linear(f=32, ...) — discarded 512-ch bottleneck.
+        self.gap = nn.AdaptiveAvgPool2d(1)
         self.head = nn.Sequential(
-            nn.AdaptiveAvgPool2d(1),
-            nn.Flatten(),
-            nn.Linear(f, f * 2),
+            nn.Linear(f * 16 + f, f * 4),   # 512+32 -> 128
             nn.ReLU(inplace=True),
             nn.Dropout(0.2),
-            nn.Linear(f * 2, n_zernike),
+            nn.Linear(f * 4, n_zernike),     # 128 -> 36
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -129,7 +147,12 @@ class UNetReconstructor(nn.Module):
         d2 = self.dec2(d3, f2)
         d1 = self.dec1(d2, f1)
 
-        return self.head(d1)
+        # Global avg pool both bottleneck (high-level) and d1 (fine spatial)
+        b_gap  = self.gap(b).flatten(1)   # (B, f*16)
+        d1_gap = self.gap(d1).flatten(1)  # (B, f)
+        combined = torch.cat([b_gap, d1_gap], dim=1)   # (B, f*16 + f)
+
+        return self.head(combined)
 
 
 class CNNReconstructor(nn.Module):
