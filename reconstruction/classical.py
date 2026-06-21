@@ -150,7 +150,7 @@ class ModalReconstructor:
         valid  = self.sensor.get_valid_subaperture_mask()          # (n_sub, n_sub) bool
         n_valid = int(valid.sum())
         N      = self.zernike_basis.shape[1]
-        tile   = N // n_sub
+        edges  = np.linspace(0, N, n_sub + 1).astype(int)
 
         # --- batch gradient over all modes ---------------------------------
         # zernike_basis: (n_modes, N, N)
@@ -169,8 +169,8 @@ class ModalReconstructor:
 
         for vi in range(n_valid):
             i, j    = ii[vi], jj[vi]
-            y0, y1  = i * tile, (i + 1) * tile
-            x0, x1  = j * tile, (j + 1) * tile
+            y0, y1  = edges[i], edges[i + 1]
+            x0, x1  = edges[j], edges[j + 1]
             # grad_x_all[:, y0:y1, x0:x1].mean(axis=(-2,-1)) → (n_modes,)
             M[vi,        :] = grad_x_all[:, y0:y1, x0:x1].mean(axis=(-2, -1))
             M[n_valid+vi,:] = grad_y_all[:, y0:y1, x0:x1].mean(axis=(-2, -1))
