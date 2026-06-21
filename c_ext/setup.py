@@ -3,7 +3,8 @@ from setuptools import setup, Extension
 ext = Extension(
     "centroid_cog",
     sources=["centroid_cog.c"],
-    extra_compile_args=["-O3", "-march=native", "-ffast-math"],
+    extra_compile_args=["-O3"],
+    libraries=["m"],
 )
 
 setup(
