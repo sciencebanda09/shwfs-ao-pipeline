@@ -1,22 +1,25 @@
 <p align="center">
   <img src="results/dashboard_full.png" alt="BAH2026 AO Pipeline Dashboard" width="900"/>
 </p>
-
 <h1 align="center">shwfs-ao-pipeline</h1>
-
+ 
 <p align="center">
   <b>End-to-end Adaptive Optics simulation &amp; reconstruction pipeline</b><br>
   Bharatiya Antariksh Hackathon 2026 · Challenge #9
 </p>
-
 <p align="center">
+  <img src="https://github.com/sciencebanda09/shwfs-ao-pipeline/actions/workflows/tests.yml/badge.svg" alt="Tests"/>
+  <img src="https://github.com/sciencebanda09/shwfs-ao-pipeline/actions/workflows/ci-quality.yml/badge.svg" alt="CI Quality"/>
+  <img src="https://img.shields.io/github/v/release/sciencebanda09/shwfs-ao-pipeline?style=flat-square&label=release" alt="Release"/>
   <img src="https://img.shields.io/badge/Python-3.10%2B-blue?style=flat-square&logo=python"/>
   <img src="https://img.shields.io/badge/PyTorch-2.0%2B-ee4c2c?style=flat-square&logo=pytorch"/>
-  <img src="https://img.shields.io/badge/CNN_Reconstruction_Strehl-0.9986-brightgreen?style=flat-square"/>
-  <img src="https://img.shields.io/badge/Full_Pipeline_Latency-0.3ms-brightgreen?style=flat-square"/>
+  <img src="https://img.shields.io/badge/CNN_Reconstruction_Strehl-0.9987-brightgreen?style=flat-square"/>
+  <img src="https://img.shields.io/badge/C_Centroiding_Speedup-127x-brightgreen?style=flat-square"/>
+  <img src="https://img.shields.io/badge/Full_Pipeline_Latency-0.035ms-brightgreen?style=flat-square"/>
+  <img src="https://img.shields.io/badge/coverage-52%25-yellow?style=flat-square"/>
   <img src="https://img.shields.io/badge/License-MIT-yellow?style=flat-square"/>
 </p>
-
+ 
 ---
 
 ## Overview
