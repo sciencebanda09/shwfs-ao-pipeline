@@ -114,7 +114,7 @@ class SHWFSSensor:
         slopes_x, slopes_y : np.ndarray, shape (n_sub, n_sub)
         """
         N    = phase_screen.shape[0]
-        tile = N // self.n_sub
+        edges = np.linspace(0, N, self.n_sub + 1).astype(int)
 
         # Single gradient call on full phase screen
         grad_y, grad_x = np.gradient(phase_screen)   # both (N, N)
@@ -127,8 +127,8 @@ class SHWFSSensor:
 
         for k in range(len(ii)):
             i, j = ii[k], jj[k]
-            y0, y1 = i * tile, (i + 1) * tile
-            x0, x1 = j * tile, (j + 1) * tile
+            y0, y1 = edges[i], edges[i + 1]
+            x0, x1 = edges[j], edges[j + 1]
             slopes_x[i, j] = grad_x[y0:y1, x0:x1].mean()
             slopes_y[i, j] = grad_y[y0:y1, x0:x1].mean()
 
@@ -158,7 +158,7 @@ class SHWFSSensor:
         """
         n_frames = phase_screens.shape[0]
         N        = phase_screens.shape[1]
-        tile     = N // self.n_sub
+        edges    = np.linspace(0, N, self.n_sub + 1).astype(int)
 
         # gradient along spatial axes; axis=-2 → rows, axis=-1 → cols
         grad_y = np.gradient(phase_screens, axis=-2)   # (n_frames, N, N)
@@ -172,8 +172,8 @@ class SHWFSSensor:
 
         for k in range(len(ii)):
             i, j = ii[k], jj[k]
-            y0, y1 = i * tile, (i + 1) * tile
-            x0, x1 = j * tile, (j + 1) * tile
+            y0, y1 = edges[i], edges[i + 1]
+            x0, x1 = edges[j], edges[j + 1]
             slopes_x[:, i, j] = grad_x[:, y0:y1, x0:x1].mean(axis=(-2, -1))
             slopes_y[:, i, j] = grad_y[:, y0:y1, x0:x1].mean(axis=(-2, -1))
 
