@@ -72,7 +72,7 @@ bayesian:
 
 slodar:
   n_stars: 2
-  star_separation_arcsec: 10.0
+  star_separation_arcsec: 8.5
   n_altitude_bins: 10
   cross_corr_method: "fft"
 
