@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import numpy as np
 from scipy.signal import fftconvolve
-from scipy.optimize import curve_fit
+from scipy.optimize import curve_fit, nnls
 
 
 class SLODARProfiler:
@@ -64,11 +64,11 @@ class SLODARProfiler:
         corr_map = fftconvolve(s1, s2[::-1, ::-1], mode="full")
         return corr_map
 
-    def extract_cn2_profile(self, correlation_map: np.ndarray) -> np.ndarray:
+    def extract_cn2_profile_legacy(self, correlation_map: np.ndarray) -> np.ndarray:
         """
-        Identify peaks in the correlation map at the expected altitude
-        offsets, fit a Gaussian to each, and use the peak amplitude as
-        a Cn^2(h) * delta_h estimate.
+        [LEGACY] Independent per-bin peak-picking from 1D cross-correlation
+        profile. Fails when correlation peak is weak/buried (shift > r0) or
+        zero-lag spike dominates. Kept for comparison.
 
         Parameters
         ----------
@@ -94,6 +94,54 @@ class SLODARProfiler:
                 cn2_profile[i] = 0.0
 
         return cn2_profile
+
+    # Keep old name as alias for backward compat
+    extract_cn2_profile = extract_cn2_profile_legacy
+
+    def fit_cn2_joint(self, correlation_profile: np.ndarray, expected_offsets: np.ndarray, n_bins: int, sigma: float = 1.5) -> np.ndarray:
+        """
+        Joint least-squares fit of Cn2 weights across the full 1D
+        cross-correlation profile, replacing independent per-bin peak-picking.
+
+        Solves:
+            C_measured(lag) ≈ sum_k [ Cn2_k * gaussian(lag, center=offset_k, sigma) ]
+
+        via non-negative least squares (NNLS) so all Cn2_k >= 0.
+
+        Parameters
+        ----------
+        correlation_profile : np.ndarray, shape (n_lags,)
+            1D cross-correlation profile (centre row of corr_map).
+        expected_offsets : np.ndarray, shape (n_bins,)
+            Expected peak offset (subaperture units) for each altitude bin,
+            measured from the profile centre index.
+        n_bins : int
+            Number of altitude bins.
+        sigma : float
+            Gaussian width (subaperture units). Default 1.5 covers
+            ~1 subaperture blur + sub-pixel interpolation error.
+
+        Returns
+        -------
+        cn2_profile : np.ndarray, shape (n_bins,)
+            Normalized Cn2 weights (sums to 1 if nonzero, else zeros).
+        """
+        n_lags = correlation_profile.shape[0]
+        center = n_lags // 2
+        lags = np.arange(n_lags, dtype=float) - center  # lag axis in subaperture units
+
+        # Build design matrix A: each column = Gaussian basis for one altitude bin
+        A = np.zeros((n_lags, n_bins))
+        for k, offset in enumerate(expected_offsets):
+            A[:, k] = np.exp(-0.5 * ((lags - offset) / sigma) ** 2)
+
+        # NNLS: min ||A @ x - correlation_profile||^2  s.t. x >= 0
+        x, _ = nnls(A, correlation_profile)
+
+        total = x.sum()
+        if total > 0:
+            x = x / total
+        return x
 
     def fit_profile(self, cn2_profile: np.ndarray, altitudes: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """
@@ -121,7 +169,7 @@ class SLODARProfiler:
     def run(self, slopes_star1_sequence: np.ndarray, slopes_star2_sequence: np.ndarray) -> np.ndarray:
         """
         Average the cross-correlation over N frames for improved SNR,
-        then extract the Cn^2(h) profile.
+        then extract the Cn^2(h) profile via joint NNLS fit.
 
         Parameters
         ----------
@@ -143,7 +191,11 @@ class SLODARProfiler:
                 accum += corr
 
         accum /= n_frames
-        return self.extract_cn2_profile(accum)
+
+        # Extract 1D centre-row profile and run joint NNLS fit
+        center_row = accum.shape[0] // 2
+        profile_1d = accum[center_row, :]
+        return self.fit_cn2_joint(profile_1d, self.expected_offsets, self.n_bins)
 
 
 def simulate_dual_star_slopes(atmosphere, sensor, theta_rad: float, n_frames: int) -> tuple[np.ndarray, np.ndarray]:
