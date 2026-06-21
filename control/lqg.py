@@ -431,15 +431,18 @@ def compare_controllers(atmosphere, sensor, dm, reconstructor, config: dict, n_f
     basis = zb_func(n_zernike, N)
 
     n_actuators = dm.n_actuators
-    # Build real influence matrix from Gaussian coupling model (Fried geometry)
-    from reconstruction.classical import DMInfluenceReconstructor
-    from actuator.geometry import hexagonal_actuator_positions
-    _act_x, _act_y = hexagonal_actuator_positions(11, coupling=0.3)
-    _infl_rec = DMInfluenceReconstructor(sensor, coupling=0.3, actuator_positions=(_act_x, _act_y))
-    # D shape: (2*n_sub, n_actuators) � project to Zernike space via modal matrix
-    # modal_matrix: (n_zernike, 2*n_sub); B = modal_matrix @ pinv(D) -> (n_zernike, n_actuators)
+    # Build real influence matrix from Gaussian coupling model (Fried geometry).
+    # Use the SAME actuator geometry as the actual DM object (dm.act_x/act_y),
+    # not a separately hardcoded hexagonal_actuator_positions(11, ...) call —
+    # that hardcoded call silently diverged from DMController's derivation
+    # (91 actuators vs dm's actual 127 for n_actuators:97 in config.yaml).
+    from reconstruction.classical import ZonalReconstructor
+    _infl_rec = ZonalReconstructor(sensor, coupling=dm.coupling, actuator_positions=(dm.act_x, dm.act_y))
+    # D shape: (2*n_sub_valid, n_actuators); modal_matrix shape: (2*n_sub_valid, n_zernike)
+    # Both map FROM their own space TO slope-space, so to get actuator->mode
+    # influence we need: B = pinv(modal_matrix) @ D -> (n_zernike, n_actuators)
     import numpy.linalg as _nla
-    actuator_influence = reconstructor.modal_matrix @ _nla.pinv(_infl_rec.interaction_matrix)
+    actuator_influence = _nla.pinv(reconstructor.modal_matrix) @ _infl_rec.interaction_matrix
 
     assert actuator_influence.shape == (n_zernike, n_actuators), f"influence shape mismatch: {actuator_influence.shape}"
     assert actuator_influence.shape == (n_zernike, n_actuators), f"influence shape mismatch: {actuator_influence.shape}"
