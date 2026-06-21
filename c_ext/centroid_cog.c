@@ -60,13 +60,61 @@ static double border_bg(const float *tile, int nrows, int ncols)
  * Standard thresholded CoG on a contiguous tile buffer.
  * bg_sigma_thresh: zero out pixels below thresh * |bg|.
  * ---------------------------------------------------------------------- */
+/* -----------------------------------------------------------------------
+ * Border-ring background mean AND standard deviation.
+ * threshold_sigma must scale the noise (std), not the background level
+ * itself — using the mean here would make a brighter-but-quiet background
+ * threshold too aggressively, and a near-zero-mean-but-noisy background
+ * threshold almost not at all.
+ * ---------------------------------------------------------------------- */
+static void border_bg_stats(const float *tile, int nrows, int ncols,
+                             double *bg_mean_out, double *bg_std_out)
+{
+    double sum = 0.0;
+    int    count = 0;
+
+    for (int c = 0; c < ncols; c++) {
+        sum += (double)tile[c];
+        sum += (double)tile[(nrows - 1) * ncols + c];
+        count += 2;
+    }
+    for (int r = 1; r < nrows - 1; r++) {
+        sum += (double)tile[r * ncols];
+        sum += (double)tile[r * ncols + ncols - 1];
+        count += 2;
+    }
+    double mean = (count > 0) ? (sum / count) : 0.0;
+
+    double sq_sum = 0.0;
+    for (int c = 0; c < ncols; c++) {
+        double d0 = (double)tile[c] - mean;
+        double d1 = (double)tile[(nrows - 1) * ncols + c] - mean;
+        sq_sum += d0 * d0 + d1 * d1;
+    }
+    for (int r = 1; r < nrows - 1; r++) {
+        double d0 = (double)tile[r * ncols] - mean;
+        double d1 = (double)tile[r * ncols + ncols - 1] - mean;
+        sq_sum += d0 * d0 + d1 * d1;
+    }
+    double std = (count > 0) ? sqrt(sq_sum / count) : 0.0;
+    if (std < 1.0) std = 1.0;  /* floor, matches Python reference path */
+
+    *bg_mean_out = mean;
+    *bg_std_out  = std;
+}
+
+/* -----------------------------------------------------------------------
+ * Standard thresholded CoG on a contiguous tile buffer.
+ * bg_sigma_thresh: zero out pixels below thresh * background_std.
+ * ---------------------------------------------------------------------- */
 static void cog_single(
     const float *tile, int nrows, int ncols,
     double bg_sigma_thresh,
     double *cx_out, double *cy_out)
 {
-    double bg    = border_bg(tile, nrows, ncols);
-    double thresh = bg_sigma_thresh * fabs(bg);
+    double bg, bg_std;
+    border_bg_stats(tile, nrows, ncols, &bg, &bg_std);
+    double thresh = bg_sigma_thresh * bg_std;
 
     double sum = 0.0, sum_x = 0.0, sum_y = 0.0;
     for (int r = 0; r < nrows; r++) {
