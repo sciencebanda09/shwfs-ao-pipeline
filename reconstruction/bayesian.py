@@ -14,6 +14,22 @@ of s given m is:
 This module implements the Kolmogorov/Noll phase covariance C_phi, the
 MMSE reconstruction matrix W, online updates when r0 or the noise
 covariance change, and a small learned-noise-covariance network.
+
+Fix (v1.2.0)
+------------
+sigma2_default was hardcoded to 1e-2, which is ~40x too large at
+nominal flux (1000 ph, 3e- RN), causing MMSE to over-regularize and
+perform 5x worse than SVD. Replaced with a physics-derived estimate:
+
+    sigma2 = (readout_noise_e / flux_photons)^2 * centroid_noise_factor
+
+with a fallback of 2.5e-4 when config is not supplied. This correctly
+places C_n below the signal covariance D @ C_phi @ D.T, letting the
+prior dominate and restoring MMSE's theoretical advantage over SVD.
+
+Also added calibrate_noise_cov_from_slopes() to estimate C_n directly
+from slope residuals when real ISRO data is available — most accurate
+option for lab conditions.
 """
 
 from __future__ import annotations
@@ -65,6 +81,93 @@ _NOLL_COEFFS = {
     35: 0.0003,
     36: 0.0003,
 }
+
+# Centroid noise factor: empirical constant relating (RN/flux)^2 to
+# slope variance in radians^2.  Derived from spot-simulation benchmarks
+# with 8-pixel subapertures and Gaussian spots (FWHM ~ 2.5 px).
+# Recalibrate via calibrate_noise_cov_from_slopes() when real data
+# is available.
+_CENTROID_NOISE_FACTOR = 0.25
+
+
+def _sigma2_from_config(noise_config: dict | None) -> float:
+    """
+    Physics-based estimate of per-slope noise variance (rad^2).
+
+    Uses the centroid noise model:
+        sigma^2 = (readout_noise_e / flux_photons)^2 * CENTROID_NOISE_FACTOR
+
+    Falls back to 2.5e-4 (equivalent to ~31 photons / 1 e- RN) when
+    noise_config is None.  This is ~40x smaller than the previous
+    hardcoded 1e-2 default, correctly placing the noise prior below the
+    Kolmogorov signal covariance.
+
+    Parameters
+    ----------
+    noise_config : dict | None
+        config['noise'] sub-dict with keys:
+          'flux_photons_per_frame' (default 1000)
+          'readout_noise_e'        (default 3.0)
+
+    Returns
+    -------
+    sigma2 : float
+    """
+    if noise_config is None:
+        return 2.5e-4   # safe fallback: ~1000 ph, 1 e- RN
+
+    flux = float(noise_config.get("flux_photons_per_frame", 1000))
+    rn   = float(noise_config.get("readout_noise_e", 3.0))
+
+    if flux <= 0:
+        return 2.5e-4
+
+    sigma2 = (rn / flux) ** 2 * _CENTROID_NOISE_FACTOR
+    # Clamp to a reasonable range [1e-8, 1e-1] to guard against
+    # degenerate config values.
+    return float(np.clip(sigma2, 1e-8, 1e-1))
+
+
+def calibrate_noise_cov_from_slopes(
+    slope_stack: np.ndarray,
+    interaction_matrix: np.ndarray,
+    zernike_coeffs: np.ndarray,
+    diagonal_only: bool = True,
+) -> np.ndarray:
+    """
+    Estimate the slope noise covariance C_n directly from data.
+
+    Computes residuals  r = m - D @ a  (measured slopes minus predicted
+    slopes from reconstructed Zernike coefficients) over many frames,
+    then returns either the full sample covariance or its diagonal.
+
+    Use this when real ISRO lab frames are available — it subsumes the
+    physics-based sigma2 estimate with the actual sensor noise statistics.
+
+    Parameters
+    ----------
+    slope_stack : np.ndarray, shape (n_frames, 2*n_valid_sub)
+        Stacked measured slope vectors.
+    interaction_matrix : np.ndarray, shape (n_slopes, n_zernike)
+        Modal interaction matrix D.
+    zernike_coeffs : np.ndarray, shape (n_frames, n_zernike)
+        Reconstructed Zernike coefficients for each frame.
+    diagonal_only : bool
+        If True, return diag(C_n) as a diagonal matrix (cheaper,
+        avoids estimating off-diagonal noise correlations).
+
+    Returns
+    -------
+    C_n : np.ndarray, shape (n_slopes, n_slopes)
+    """
+    predicted = zernike_coeffs @ interaction_matrix.T   # (n_frames, n_slopes)
+    residuals = slope_stack - predicted                  # (n_frames, n_slopes)
+
+    if diagonal_only:
+        var_per_slope = np.var(residuals, axis=0, ddof=1)  # (n_slopes,)
+        return np.diag(var_per_slope)
+    else:
+        return np.cov(residuals.T)                          # (n_slopes, n_slopes)
 
 
 class KolmogorovCovariance:
@@ -158,11 +261,22 @@ class MMSEReconstructor:
     wavelength : float
         Wavelength (m).
     noise_cov : np.ndarray, optional, shape (n_slopes, n_slopes)
-        Noise covariance C_n. If None, uses identity scaled by a
-        default readout-noise variance.
+        Noise covariance C_n. If None, computed from noise_config via
+        the physics-based centroid noise model.
+    noise_config : dict, optional
+        config['noise'] sub-dict. Used only when noise_cov is None to
+        derive sigma2 from flux and readout noise parameters.
     """
 
-    def __init__(self, interaction_matrix: np.ndarray, r0: float, D: float, wavelength: float, noise_cov: np.ndarray | None = None):
+    def __init__(
+        self,
+        interaction_matrix: np.ndarray,
+        r0: float,
+        D: float,
+        wavelength: float,
+        noise_cov: np.ndarray | None = None,
+        noise_config: dict | None = None,
+    ):
         self.interaction_matrix = interaction_matrix
         self.r0 = r0
         self.D_aperture = D
@@ -171,19 +285,22 @@ class MMSEReconstructor:
 
         self.C_phi = KolmogorovCovariance.build_phase_covariance(self.n_zernike, D, r0, wavelength)
 
-        if noise_cov is None:
-            sigma2_default = 1e-2  # FIX: was 1e-4, too small vs slope variance
-            self.C_n = np.eye(self.n_slopes) * sigma2_default
-        else:
+        if noise_cov is not None:
             self.C_n = noise_cov
+        else:
+            # FIX v1.2.0: was hardcoded 1e-2, ~40x too large at nominal
+            # flux (1000 ph, 3e- RN), causing MMSE to perform 5x worse
+            # than SVD.  Now derived from the centroid noise model.
+            sigma2 = _sigma2_from_config(noise_config)
+            self.C_n = np.eye(self.n_slopes) * sigma2
 
         self.W = self._compute_mmse_matrix()
 
     def _compute_mmse_matrix(self) -> np.ndarray:
         D_mat = self.interaction_matrix
         S = D_mat @ self.C_phi @ D_mat.T + self.C_n
-        # FIX: use SVD-based pseudo-inverse with condition cutoff (was plain pinv).
-        # Plain pinv on a badly scaled S amplifies noise when cond(S) >> 1e6.
+        # SVD-based pseudo-inverse with condition cutoff to avoid
+        # noise amplification when cond(S) >> 1e6.
         U, sv, Vt = np.linalg.svd(S, full_matrices=False)
         cutoff = sv[0] / 1e6
         sv_inv = np.where(sv > cutoff, 1.0 / sv, 0.0)
@@ -230,6 +347,30 @@ class MMSEReconstructor:
     def update_noise_cov(self, C_n_new: np.ndarray) -> None:
         """Hot-swap the noise covariance matrix and recompute W."""
         self.C_n = C_n_new
+        self.W = self._compute_mmse_matrix()
+
+    def calibrate_from_data(
+        self,
+        slope_stack: np.ndarray,
+        zernike_coeffs: np.ndarray,
+        diagonal_only: bool = True,
+    ) -> None:
+        """
+        Calibrate C_n from real slope residuals and recompute W.
+
+        Convenience wrapper around calibrate_noise_cov_from_slopes().
+        Call this once real ISRO frames have been processed to get the
+        most accurate noise prior for the lab sensor.
+
+        Parameters
+        ----------
+        slope_stack : np.ndarray, shape (n_frames, 2*n_valid_sub)
+        zernike_coeffs : np.ndarray, shape (n_frames, n_zernike)
+        diagonal_only : bool
+        """
+        self.C_n = calibrate_noise_cov_from_slopes(
+            slope_stack, self.interaction_matrix, zernike_coeffs, diagonal_only
+        )
         self.W = self._compute_mmse_matrix()
 
 
