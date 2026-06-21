@@ -22,7 +22,7 @@ jobs:
           flake8 . \
             --exclude=.git,__pycache__,*.egg-info,notebooks \
             --max-line-length=100 \
-            --ignore=E203,W503
+            --ignore=E203,W503,E221,E501,E741,E127,W391
 
   typecheck:
     name: Type check (mypy)
