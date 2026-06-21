@@ -12,8 +12,8 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.10%2B-blue?style=flat-square&logo=python"/>
   <img src="https://img.shields.io/badge/PyTorch-2.0%2B-ee4c2c?style=flat-square&logo=pytorch"/>
-  <img src="https://img.shields.io/badge/Strehl-0.997-brightgreen?style=flat-square"/>
-  <img src="https://img.shields.io/badge/Latency-0.3ms-brightgreen?style=flat-square"/>
+  <img src="https://img.shields.io/badge/CNN_Reconstruction_Strehl-0.9986-brightgreen?style=flat-square"/>
+  <img src="https://img.shields.io/badge/Full_Pipeline_Latency-0.3ms-brightgreen?style=flat-square"/>
   <img src="https://img.shields.io/badge/License-MIT-yellow?style=flat-square"/>
 </p>
 
@@ -21,7 +21,7 @@
 
 ## Overview
 
-A production-ready AO pipeline: raw Shack-Hartmann WFS frames → wavefront reconstruction → DM actuator commands → **Strehl > 0.99** in closed loop.
+A production-ready AO pipeline: raw Shack-Hartmann WFS frames â†’ wavefront reconstruction â†’ DM actuator commands â†’ **Strehl > 0.99** in closed loop.
 
 ```
 SH-WFS frames → centroiding → wavefront reconstruction → DM actuator commands
@@ -40,8 +40,10 @@ SH-WFS frames → centroiding → wavefront reconstruction → DM actuator comma
 ### Strehl Ratio — Predictive AO vs Closed Loop vs Open Loop
 ![Strehl Ratio Time Series](results/demo_strehl_timeseries.png)
 
-### Reconstructed Wavefront Phase Maps (Real SH-WFS Data, r₀ = 0.534 m, τ₀ = 35.8 ms)
+### Reconstructed Wavefront Phase Maps (Real SH-WFS Data, râ‚€ = 0.534 m, Ï„â‚€ = 35.8 ms)
 ![Real Phase Maps](results/real_phase_maps.png)
+
+Generated via the real-frame ingestion path (`pipeline.py --mode real`) on synthetic BMPs from `sim/generate_bmp_frames.py` — this proves the ingestion pipeline end-to-end ahead of ISRO-provided lab data. See [Synthetic BMP Frame Generation](#synthetic-bmp-frame-generation) below.
 
 ---
 
@@ -64,7 +66,7 @@ CNN/UNet delivers **2× lower RMS WFE** vs classical SVD.
 | LQG | 0.702 | 51.8 nm |
 | LQG + Predictive | 0.694 | 52.7 nm |
 
-### Speed (10×10 subapertures)
+### Speed (10Ã—10 subapertures)
 
 | Step | Method | Latency |
 |------|--------|---------|
@@ -137,6 +139,8 @@ Auto-detected at runtime. Falls back to Python CoG without it.
 | r₀ | 0.15 m |
 | Simulation timestep | 1 ms |
 | Frames per dataset | 500 |
+
+`r₀ = 0.15 m` above is the simulation's configured ground-truth value used for training/benchmark datasets. The `r₀ = 0.534 m` reported in [Results](#results) is the *estimated* value from a separate synthetic-BMP reconstruction run with different turbulence settings — not a contradiction, just two different runs.
 
 ---
 
@@ -403,3 +407,4 @@ where $\sigma_\phi^2 = \langle \phi_{\text{residual}}^2 \rangle$ is residual wav
 - Fusco, T., et al. (2004). Optimal wavefront reconstruction for MCAO. *JOSA A*, 18(10).
 - Véran, J.-P., et al. (1997). Estimation of AO long-exposure PSF from control loop data. *JOSA A*, 14(11).
 - Wiberg, D. M., et al. (2004). LQG vs explicit predictive control of AO systems. *Proc. SPIE*.
+
