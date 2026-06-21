@@ -153,6 +153,12 @@ class DMController:
 
         self.mask = get_aperture_mask(self.N, "circular")
 
+        # Z2C fast path: precompute (command_matrix @ basis) once per Zernike
+        # basis set, so zernike_to_commands_fast skips the full N*N pixel-space
+        # matmul and instead does an n_actuators x n_modes matvec.
+        self._z2c_matrix = None
+        self._z2c_basis_id = None
+
         self._integrator_commands = np.zeros(self.n_actuators)
 
         # Last computed commands in µm — exposed for hackathon output
@@ -212,6 +218,55 @@ class DMController:
         phase_radians = np.tensordot(zernike_coeffs, zernike_basis, axes=(0, 0))
         phase_meters  = phase_radians * (self.wavelength_m / (2.0 * np.pi))
         return self.wavefront_to_commands(phase_meters, mask)
+
+    def _build_z2c(self, zernike_basis: np.ndarray) -> None:
+        """
+        Precompute the Zernike-coefficients -> commands projection matrix.
+
+        wavefront_to_commands() does:
+            commands = -0.5 * clip(command_matrix @ (phase * mask).flatten())
+        and zernike_to_commands() builds phase from coeffs first:
+            phase = tensordot(coeffs, basis) * (wavelength / 2pi)
+
+        Folding the basis into command_matrix once means each subsequent
+        call is an (n_actuators x n_modes) matvec instead of rebuilding and
+        flattening an (N, N) phase map every frame.
+        """
+        n_modes = zernike_basis.shape[0]
+        basis_flat = zernike_basis.reshape(n_modes, -1)              # (n_modes, N*N)
+        mask_flat  = self.mask.flatten().astype(zernike_basis.dtype)
+        basis_flat = basis_flat * mask_flat                          # apply aperture mask
+        self._z2c_matrix = self.command_matrix @ basis_flat.T        # (n_actuators, n_modes)
+        self._z2c_basis_id = id(zernike_basis)
+
+    def zernike_to_commands_fast(
+        self,
+        zernike_coeffs: np.ndarray,
+        zernike_basis: np.ndarray,
+    ) -> np.ndarray:
+        """
+        Fast path for zernike_to_commands(): precomputes
+        (command_matrix @ basis) once via _build_z2c, then each call is an
+        (n_actuators x n_modes) matvec instead of the full
+        (n_actuators x N*N) matvec used by the pixel-space path.
+
+        Mathematically equivalent to zernike_to_commands() to floating-point
+        precision (mask is applied the same way, just folded into the
+        precomputed matrix instead of applied per-frame).
+
+        Returns commands in metres; self.last_commands_um set in micrometres.
+        """
+        if self._z2c_matrix is None or self._z2c_basis_id != id(zernike_basis):
+            self._build_z2c(zernike_basis)
+
+        scale = self.wavelength_m / (2.0 * np.pi)
+        raw_commands = self._z2c_matrix @ (zernike_coeffs * scale)
+
+        commands = -0.5 * raw_commands
+        commands = np.clip(commands, -self.stroke_limit_m, self.stroke_limit_m)
+
+        self.last_commands_um = commands * 1e6
+        return commands
 
     # ------------------------------------------------------------------
     # Batch: many frames at once
