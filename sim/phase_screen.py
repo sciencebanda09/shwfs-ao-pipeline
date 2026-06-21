@@ -118,8 +118,20 @@ def compute_rms_wavefront_error(
     """
     RMS wavefront error (radians) between true and reconstructed phase
     maps, evaluated over the valid aperture.
+
+    Residual piston (the mean phase over the aperture) is removed before
+    computing RMS: a uniform phase offset across the pupil has no effect
+    on image quality (Strehl ratio), and is unobservable to any slope-
+    based wavefront sensor by physics (a uniform phase has zero
+    gradient everywhere) -- so no slope-sensor-driven AO loop can ever
+    correct it. Including it in the RMS would penalize every controller
+    equally for an uncontrollable quantity and mask real differences in
+    correction of the actually-controllable wavefront content. This
+    matches standard AO practice (Strehl/RMS WFE are always reported
+    piston-removed).
     """
     residual = (phase_true - phase_reconstructed)[mask]
+    residual = residual - residual.mean()
     return float(np.sqrt(np.mean(residual ** 2)))
 
 
