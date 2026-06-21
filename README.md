@@ -8,7 +8,7 @@
   Bharatiya Antariksh Hackathon 2026 · Challenge #9
 </p>
 <p align="center">
-  <img src="https://github.com/sciencebanda09/shwfs-ao-pipeline/actions/workflows/tests.yml/badge.svg" alt="Tests"/>
+  <img src="https://github.com/sciencebanda09/shwfs-ao-pipeline/actions/workflows/test.yml/badge.svg" alt="Tests"/>
   <img src="https://github.com/sciencebanda09/shwfs-ao-pipeline/actions/workflows/ci-quality.yml/badge.svg" alt="CI Quality"/>
   <img src="https://img.shields.io/github/v/release/sciencebanda09/shwfs-ao-pipeline?style=flat-square&label=release" alt="Release"/>
   <img src="https://img.shields.io/badge/Python-3.10%2B-blue?style=flat-square&logo=python"/>
