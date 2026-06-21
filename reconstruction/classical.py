@@ -141,6 +141,21 @@ class ModalReconstructor:
         Compute the slope response (x and y) of each Zernike mode at every
         valid subaperture, assembling a (2*n_valid_sub, n_modes) matrix.
 
+        The basis array passed in is hard-masked to the circular aperture
+        (zero outside). Taking np.gradient directly on that array makes
+        every mode's derivative pick up a spurious edge-ring contribution
+        from the 1->0 step at the aperture boundary -- most visible for
+        rotationally-symmetric (m=0) modes like piston and defocus, whose
+        gradients should be governed purely by the mode's own analytic
+        shape but instead pick up a shared boundary-discontinuity term,
+        making them appear correlated in slope-space when they are not.
+
+        To avoid this, each mode is first extended from inside the
+        aperture to just outside it via nearest-neighbour fill (so the
+        gradient never sees a hard step), then differentiated, then
+        cropped back to valid (in-aperture-overlapping) subaperture
+        tiles exactly as before.
+
         Vectorised implementation:
           1. Compute np.gradient for ALL modes at once → (n_modes, N, N) each.
           2. Use pre-built slice index arrays to average each tile in a single
@@ -153,11 +168,26 @@ class ModalReconstructor:
         edges  = np.linspace(0, N, n_sub + 1).astype(int)
 
         # --- batch gradient over all modes ---------------------------------
+        basis_f64 = self.zernike_basis.astype(np.float64)
+
+        # Detect the aperture mask from the basis itself (any mode nonzero
+        # at a pixel => inside aperture) and extend values outward via
+        # nearest-neighbour fill so the gradient sees no hard edge.
+        ap_mask = np.any(np.abs(basis_f64) > 1e-12, axis=0)
+        if ap_mask.any() and not ap_mask.all():
+            from scipy.ndimage import distance_transform_edt
+            _, (idx_y, idx_x) = distance_transform_edt(~ap_mask, return_indices=True)
+            basis_extended = basis_f64.copy()
+            for m_idx in range(basis_f64.shape[0]):
+                mode = basis_f64[m_idx]
+                basis_extended[m_idx, ~ap_mask] = mode[idx_y[~ap_mask], idx_x[~ap_mask]]
+        else:
+            basis_extended = basis_f64
+
         # zernike_basis: (n_modes, N, N)
         # np.gradient with axis keyword returns list[array]
         # grad[1] → d/dx (axis=-1), grad[0] → d/dy (axis=-2)
-        basis_f64 = self.zernike_basis.astype(np.float64)
-        grad_y_all, grad_x_all = np.gradient(basis_f64, axis=(-2, -1))
+        grad_y_all, grad_x_all = np.gradient(basis_extended, axis=(-2, -1))
         # shapes: (n_modes, N, N)
 
         # --- vectorised tile averaging ------------------------------------
