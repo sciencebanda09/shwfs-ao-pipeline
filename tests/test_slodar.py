@@ -132,3 +132,77 @@ def test_tau0_per_mode_ordering():
 
     # tau0 should generally decrease with mode index (higher modes faster)
     assert tau0[0] > tau0[-1]
+
+
+def test_fit_cn2_joint_3layer():
+    """
+    Joint NNLS fitter should recover 3-layer atmosphere (ground + 5km + 10km)
+    using synthetic slope maps with known shifts, at star_separation_arcsec=3.0.
+
+    Success: ground layer bin recovered + at least 5000m layer within ±1 bin.
+    L2 error < 0.3.
+    """
+    # Config: sweet-spot separation found during diagnosis
+    n_sub = 10
+    pitch = 0.05  # aperture_diameter_m / n_subapertures = 0.5/10
+    star_sep_arcsec = 3.0
+    theta_rad = np.deg2rad(star_sep_arcsec / 3600.0)
+
+    layer_altitudes_m = np.array([0.0, 5000.0, 10000.0])
+    cn2_weights = np.array([0.6, 0.3, 0.1])
+
+    max_alt = 12000.0
+    n_bins = 10
+
+    profiler = SLODARProfiler(
+        n_subapertures=n_sub,
+        subaperture_pitch_m=pitch,
+        star_separation_rad=theta_rad,
+        max_altitude_m=max_alt,
+        n_bins=n_bins,
+    )
+
+    # Simulate n_frames of slope pairs: star2 = weighted sum of shifted-layer slopes
+    rng = np.random.default_rng(42)
+    n_frames = 200
+    n_lags = 2 * n_sub - 1
+    center = n_lags // 2
+
+    # Build synthetic averaged 1D cross-correlation profile directly:
+    # sum of Gaussians centred at expected offsets, weighted by cn2_weights.
+    # This is the noiseless ground truth the NNLS should invert perfectly.
+    lags = np.arange(n_lags, dtype=float) - center
+    sigma = 1.5
+    profile_clean = np.zeros(n_lags)
+    for w, alt in zip(cn2_weights, layer_altitudes_m):
+        offset = alt * theta_rad / pitch
+        profile_clean += w * np.exp(-0.5 * ((lags - offset) / sigma) ** 2)
+
+    # Add mild noise (SNR ~20) to simulate finite averaging
+    noise_std = profile_clean.max() * 0.05
+    profile_noisy = profile_clean + rng.normal(0, noise_std, size=n_lags)
+
+    # Run joint fitter
+    cn2_recovered = profiler.fit_cn2_joint(profile_noisy, profiler.expected_offsets, n_bins, sigma=sigma)
+
+    # Validate against truth
+    result = validate_slodar(cn2_recovered, cn2_weights, layer_altitudes_m)
+
+    # L2 error target
+    assert result["l2_error"] < 0.3, (
+        f"L2 error {result['l2_error']:.3f} >= 0.3. "
+        f"Recovered: {cn2_recovered}"
+    )
+
+    # Ground layer (h=0, offset=0) must be recovered: bin 0 should be dominant
+    assert cn2_recovered[0] > 0.1, (
+        f"Ground layer not recovered: cn2_recovered[0]={cn2_recovered[0]:.3f}"
+    )
+
+    # 5000m layer: find expected bin, check within ±1 bin of peak
+    bin_edges = np.linspace(0, layer_altitudes_m.max() * 1.2, n_bins + 1)
+    bin_5km = int(np.clip(np.searchsorted(bin_edges, 5000.0) - 1, 0, n_bins - 1))
+    peak_bin = int(np.argmax(cn2_recovered[1:]) + 1)  # exclude ground bin
+    assert abs(peak_bin - bin_5km) <= 1, (
+        f"5000m layer not recovered: peak at bin {peak_bin}, expected ~{bin_5km}"
+    )

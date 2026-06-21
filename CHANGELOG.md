@@ -5,6 +5,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
+### Fixed
+- fix(slodar): replace independent peak-picking with joint NNLS fit for Cn2 profile recovery — Closes #6
+
+
 
 ## [1.1.0] - 2026-06-21
 
@@ -33,3 +37,4 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 - Initial release: SH-WFS simulation, zonal/modal reconstruction, LQG control, SLODAR profiling, C centroiding extension
+
