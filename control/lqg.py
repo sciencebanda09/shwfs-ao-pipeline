@@ -486,7 +486,7 @@ def compare_controllers(atmosphere, sensor, dm, reconstructor, config: dict, n_f
         # --- Integrator ---
         _, residual_int = dm.closed_loop_step(phase_m, get_aperture_mask(N, "circular"), gain=0.5)
         rms_int = compute_rms_wavefront_error(phase_m, phase_m - residual_int + residual_int, mask)
-        rms_int_rad = float(np.sqrt(np.mean(residual_int[mask] ** 2)) / (wavelength / (2 * np.pi)))
+        rms_int_rad = float(np.sqrt(np.mean((residual_int[mask] - residual_int[mask].mean()) ** 2)) / (wavelength / (2 * np.pi)))
         strehl_int = compute_strehl_ratio(rms_int_rad)
         results.append({"frame": k, "controller": "integrator", "strehl": strehl_int,
                          "rms_wfe_nm": rms_int_rad * (wavelength / (2 * np.pi)) * 1e9})
@@ -496,7 +496,7 @@ def compare_controllers(atmosphere, sensor, dm, reconstructor, config: dict, n_f
         zernike_est = lqg.kf.x_post
         phase_corr = np.tensordot(zernike_est, basis, axes=(0, 0)) * (wavelength / (2 * np.pi))
         residual_lqg = (phase_m - phase_corr) * mask
-        rms_lqg_rad = float(np.sqrt(np.mean(residual_lqg[mask] ** 2)) / (wavelength / (2 * np.pi)))
+        rms_lqg_rad = float(np.sqrt(np.mean((residual_lqg[mask] - residual_lqg[mask].mean()) ** 2)) / (wavelength / (2 * np.pi)))
         strehl_lqg = compute_strehl_ratio(rms_lqg_rad)
         results.append({"frame": k, "controller": "lqg", "strehl": strehl_lqg,
                          "rms_wfe_nm": rms_lqg_rad * (wavelength / (2 * np.pi)) * 1e9})
@@ -508,7 +508,7 @@ def compare_controllers(atmosphere, sensor, dm, reconstructor, config: dict, n_f
         x_pred_next = lqg_pred.A @ lqg_pred.kf.x_post
         phase_corr_pred = np.tensordot(x_pred_next, basis, axes=(0, 0)) * (wavelength / (2 * np.pi))
         residual_pred = (phase_m - phase_corr_pred) * mask
-        rms_pred_rad = float(np.sqrt(np.mean(residual_pred[mask] ** 2)) / (wavelength / (2 * np.pi)))
+        rms_pred_rad = float(np.sqrt(np.mean((residual_pred[mask] - residual_pred[mask].mean()) ** 2)) / (wavelength / (2 * np.pi)))
         strehl_pred = compute_strehl_ratio(rms_pred_rad)
         results.append({"frame": k, "controller": "lqg_predictive", "strehl": strehl_pred,
                          "rms_wfe_nm": rms_pred_rad * (wavelength / (2 * np.pi)) * 1e9})

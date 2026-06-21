@@ -24,8 +24,18 @@ from sim.shwfs import SHWFSSensor, _k_shift
 
 
 def _rms_wfe_from_coeffs(pred_coeffs: np.ndarray, true_coeffs: np.ndarray, N: int) -> tuple[float, float]:
-    """Compute RMS WFE (radians) and Strehl ratio from coefficient error."""
-    diff = pred_coeffs - true_coeffs
+    """
+    Compute RMS WFE (radians) and Strehl ratio from coefficient error.
+
+    Piston (coefficient index 0, Noll j=1) is excluded: a slope-based
+    wavefront sensor is physically blind to piston (a uniform phase
+    offset produces zero gradient everywhere), so no reconstructor can
+    or should be scored on recovering it. Including it would penalize
+    every reconstructor equally for an unmeasurable quantity and mask
+    real differences in reconstruction quality on the modes that are
+    actually observable.
+    """
+    diff = pred_coeffs[1:] - true_coeffs[1:]
     rms = float(np.sqrt(np.mean(diff ** 2)))
     strehl = compute_strehl_ratio(rms)
     return rms, strehl

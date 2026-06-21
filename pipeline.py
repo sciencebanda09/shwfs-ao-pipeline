@@ -14,6 +14,8 @@ Improvements over original:
   - tau0 reporting uses higher-order mode estimate (not tip/tilt) and
     also prints the direct τ₀ = 0.314 r₀/v cross-check.
   - Fried-geometry config option documented in argparse help.
+  - Panel PNG export fixed: each panel exported as individual figure,
+    not a copy of the full 6-panel dashboard.
 """
 
 from __future__ import annotations
@@ -282,6 +284,80 @@ def _load_benchmark_csvs(results_dir: Path, dashboard_results: dict) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Panel PNG export helper
+# ---------------------------------------------------------------------------
+
+def _export_panel_pngs(fig_dashboard, results_dir: Path) -> None:
+    """
+    Export each dashboard subplot as a separate, clean PNG.
+    Fixes the bug where every panel PNG was a copy of the full 6-panel figure
+    with overlapping titles and wrong dimensions.
+    """
+    import plotly.io as _pio
+    import plotly.graph_objects as _go
+
+    # Full dashboard at proper size
+    _pio.write_image(
+        fig_dashboard,
+        str(results_dir / "dashboard_full.png"),
+        width=1800, height=1000, scale=2,
+    )
+    print("Saved dashboard_full.png")
+
+    # Map each panel to its subplot axis indices
+    # Plotly subplot axes: row1=(x,y), (x2,y2), (x3,y3); row2=(x4,y4), (x5,y5), (x6,y6)
+    _panel_configs = [
+        ("strehl_timeseries", 1),
+        ("rms_vs_noise",      2),
+        ("zernike_spectrum",  3),
+        ("r0_accuracy",       4),
+        ("actuator_commands", 5),
+        ("residual_phase",    6),
+    ]
+
+    annotations = fig_dashboard.layout.annotations or []
+
+    for _title, _idx in _panel_configs:
+        # Build axis key strings Plotly uses internally
+        _xkey = "x" if _idx == 1 else f"x{_idx}"
+        _ykey = "y" if _idx == 1 else f"y{_idx}"
+
+        _pfig = _go.Figure()
+        for _trace in fig_dashboard.data:
+            tx = getattr(_trace, "xaxis", None)
+            ty = getattr(_trace, "yaxis", None)
+            # heatmap traces use xaxis/yaxis; match either coordinate
+            if tx == _xkey or ty == _ykey:
+                _pfig.add_trace(_trace)
+
+        # Get subplot title from dashboard annotations
+        _panel_title = _title.replace("_", " ").title()
+        if _idx - 1 < len(annotations):
+            _panel_title = annotations[_idx - 1].text
+
+        _pfig.update_layout(
+            title_text=_panel_title,
+            title_font_size=16,
+            height=480,
+            width=720,
+            margin=dict(t=60, b=50, l=60, r=30),
+            showlegend=True,
+        )
+
+        # Carry over axis labels/type from original figure
+        src_xaxis = getattr(fig_dashboard.layout, f"xaxis{'' if _idx == 1 else _idx}", None)
+        src_yaxis = getattr(fig_dashboard.layout, f"yaxis{'' if _idx == 1 else _idx}", None)
+        if src_xaxis is not None:
+            _pfig.update_xaxes(type=src_xaxis.type or "linear")
+        if src_yaxis is not None:
+            _pfig.update_yaxes(type=src_yaxis.type or "linear")
+
+        out_path = str(results_dir / f"panel_{_title}.png")
+        _pio.write_image(_pfig, out_path, width=720, height=480, scale=2)
+        print(f"Saved panel_{_title}.png")
+
+
+# ---------------------------------------------------------------------------
 # Demo
 # ---------------------------------------------------------------------------
 
@@ -383,23 +459,13 @@ def run_demo(config: dict) -> None:
     # Load benchmark CSVs (single call, not triplicated)
     _load_benchmark_csvs(results_dir, dashboard_results)
 
-    # Dashboard
+    # Dashboard HTML
     fig_dashboard = create_dashboard(dashboard_results, config)
     export_dashboard_html(fig_dashboard, str(results_dir / "dashboard.html"))
     print(f"Dashboard saved to {results_dir / 'dashboard.html'}")
 
-    import plotly.io as _pio
-    _panel_titles = [
-        "strehl_timeseries", "rms_vs_noise", "zernike_spectrum",
-        "r0_accuracy", "actuator_commands", "residual_phase",
-    ]
-    for _i, _title in enumerate(_panel_titles):
-        _pfig = create_dashboard(dashboard_results, config)
-        _pio.write_image(_pfig, str(results_dir / f"panel_{_title}.png"),
-                         width=600, height=400, scale=2)
-        print(f"Saved panel_{_title}.png")
-    _pio.write_image(fig_dashboard, str(results_dir / "dashboard_full.png"),
-                     width=1200, height=800, scale=2)
+    # Export panel PNGs (fixed — each panel is its own figure)
+    _export_panel_pngs(fig_dashboard, results_dir)
 
 
 # ---------------------------------------------------------------------------
@@ -467,14 +533,12 @@ def run_real_data(config: dict, bmp_dir: str, reference: str | None = None) -> N
     print(f"Zernike reconstruction: {dt_recon_ms:.3f} ms/frame (batched)")
 
     # ----- Phase maps from Zernike coefficients -----
-    # tensordot: (n_frames, n_modes) × (n_modes, N, N) → (n_frames, N, N)
     t0            = _time_mod.perf_counter()
     all_phase_maps = np.tensordot(all_zernike, basis, axes=(1, 0))  # (n_frames, N, N)
     dt_phase_ms   = (_time_mod.perf_counter() - t0) * 1000.0 / max(n_frames, 1)
     print(f"Phase map synthesis:    {dt_phase_ms:.3f} ms/frame (batched)")
 
     # ----- Actuator commands (batched) -----
-    # Convert Zernike (radians) → phase (metres) batch
     phase_metres = all_phase_maps * (sim_cfg["wavelength_m"] / (2.0 * np.pi))
     t0 = _time_mod.perf_counter()
     all_cmds_m, all_cmds_um = dm.commands_batch(phase_metres, mask)
@@ -495,9 +559,7 @@ def run_real_data(config: dict, bmp_dir: str, reference: str | None = None) -> N
     params = estimator.fit(all_zernike)
     r0     = params["r0_m"]
 
-    # Primary τ₀: higher-order mode PSD estimate
     tau0_ho  = params["tau0_s"]
-    # Cross-check: τ₀ = 0.314 r₀/v
     tau0_dir = params["tau0_direct_s"]
 
     print(f"\nTurbulence characterization:")
@@ -513,7 +575,7 @@ def run_real_data(config: dict, bmp_dir: str, reference: str | None = None) -> N
         zernike_coeffs=all_zernike,
         phase_maps=all_phase_maps,
         actuator_maps_m=all_cmds_m,
-        actuator_maps_um=all_cmds_um,   # stroke in µm — hackathon output spec
+        actuator_maps_um=all_cmds_um,
         r0_m=r0,
         tau0_s=tau0_ho,
         tau0_direct_s=tau0_dir,

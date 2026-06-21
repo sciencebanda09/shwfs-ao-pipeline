@@ -508,7 +508,7 @@ def compare_svd_vs_mmse(
         pred_svd = svd_reconstructor.reconstruct(sx, sy)
         pred_mmse = mmse_reconstructor.reconstruct(sx, sy, valid_mask=valid_mask)
 
-        rms_svd[k] = np.sqrt(np.mean((pred_svd - truth) ** 2))
-        rms_mmse[k] = np.sqrt(np.mean((pred_mmse - truth) ** 2))
+        rms_svd[k] = np.sqrt(np.mean((pred_svd[1:] - truth[1:]) ** 2))
+        rms_mmse[k] = np.sqrt(np.mean((pred_mmse[1:] - truth[1:]) ** 2))
 
     return pd.DataFrame({"frame": np.arange(n_frames), "rms_svd": rms_svd, "rms_mmse": rms_mmse})
