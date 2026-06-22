@@ -24,7 +24,7 @@
 
 ## Overview
 
-A production-ready AO pipeline: raw Shack-Hartmann WFS frames â†’ wavefront reconstruction â†’ DM actuator commands â†’ **Strehl > 0.99** in closed loop.
+A production-ready AO pipeline: raw Shack-Hartmann WFS frames → wavefront reconstruction → DM actuator commands → **Strehl > 0.99** in closed loop.
 
 ```
 SH-WFS frames → centroiding → wavefront reconstruction → DM actuator commands
@@ -43,7 +43,7 @@ SH-WFS frames → centroiding → wavefront reconstruction → DM actuator comma
 ### Strehl Ratio — Predictive AO vs Closed Loop vs Open Loop
 ![Strehl Ratio Time Series](results/demo_strehl_timeseries.png)
 
-### Reconstructed Wavefront Phase Maps (Real SH-WFS Data, râ‚€ = 0.534 m, Ï„â‚€ = 35.8 ms)
+### Reconstructed Wavefront Phase Maps (Real SH-WFS Data, r₀ = 0.534 m, τ₀ = 35.8 ms)
 ![Real Phase Maps](results/real_phase_maps.png)
 
 Generated via the real-frame ingestion path (`pipeline.py --mode real`) on synthetic BMPs from `sim/generate_bmp_frames.py` — this proves the ingestion pipeline end-to-end ahead of ISRO-provided lab data. See [Synthetic BMP Frame Generation](#synthetic-bmp-frame-generation) below.
@@ -71,7 +71,7 @@ CNN/UNet delivers **3.6× lower RMS WFE** vs classical SVD. RMS WFE is reported 
 
 Integrator outperforms LQG here because the LQG controller is tuned conservatively (AR(1) state model, fixed process noise). All RMS WFE values piston-excluded per standard AO convention.
 
-### Speed (10Ã—10 subapertures)
+### Speed (10×10 subapertures)
 
 | Step | Method | Latency |
 |------|--------|---------|
