@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/github/v/release/sciencebanda09/shwfs-ao-pipeline?style=flat-square&label=release" alt="Release"/>
   <img src="https://img.shields.io/badge/Python-3.10%2B-blue?style=flat-square&logo=python"/>
   <img src="https://img.shields.io/badge/PyTorch-2.0%2B-ee4c2c?style=flat-square&logo=pytorch"/>
-  <img src="https://img.shields.io/badge/CNN_Reconstruction_Strehl-0.9987-brightgreen?style=flat-square"/>
+  <img src="https://img.shields.io/badge/CNN_Reconstruction_Strehl-0.9991-brightgreen?style=flat-square"/>
   <img src="https://img.shields.io/badge/C_Centroiding_Speedup-127x-brightgreen?style=flat-square"/>
   <img src="https://img.shields.io/badge/Full_Pipeline_Latency-0.035ms-brightgreen?style=flat-square"/>
   <img src="https://img.shields.io/badge/coverage-52%25-yellow?style=flat-square"/>
@@ -54,20 +54,22 @@ Generated via the real-frame ingestion path (`pipeline.py --mode real`) on synth
 
 ### Reconstruction
 
-| Method | Mean Strehl | RMS WFE |
+| Method | Mean Strehl | RMS WFE (piston-excluded) |
 |--------|------------|---------|
-| Classical SVD | 0.9939 | 75.1 nm |
-| **CNN / UNet** | **0.9986** | **37.1 nm** |
+| Classical SVD | 0.9877 | 9.7 nm |
+| **CNN / UNet** | **0.9991** | **2.7 nm** |
 
-CNN/UNet delivers **2× lower RMS WFE** vs classical SVD.
+CNN/UNet delivers **3.6× lower RMS WFE** vs classical SVD. RMS WFE is reported piston-excluded (standard AO convention — piston is physically unobservable from slope measurements).
 
 ### Controller
 
 | Controller | Mean Strehl | Mean RMS WFE |
 |-----------|------------|-------------|
-| Integrator | **0.967** | **15.4 nm** |
-| LQG | 0.702 | 51.8 nm |
-| LQG + Predictive | 0.694 | 52.7 nm |
+| **Integrator** | **0.965** | **16.1 nm** |
+| LQG | 0.870 | 32.3 nm |
+| LQG + Predictive | 0.870 | 32.2 nm |
+
+Integrator outperforms LQG here because the LQG controller is tuned conservatively (AR(1) state model, fixed process noise). All RMS WFE values piston-excluded per standard AO convention.
 
 ### Speed (10Ã—10 subapertures)
 
@@ -83,7 +85,17 @@ Target: < 10 ms to track τ₀ ~ 5–20 ms. **Achieved: 0.3 ms.**
 
 ---
 
-## Repository Layout
+## Verification Notes
+
+All benchmark numbers above were produced by an end-to-end verified pipeline run (`make sim → make train → make eval`) on the current `main`. Key corrections applied during verification (see [PR #22](https://github.com/sciencebanda09/shwfs-ao-pipeline/pull/22) for full details):
+
+- **Piston excluded from all RMS WFE / Strehl metrics** — piston is physically unobservable from slope-sensor measurements (uniform phase offset = zero gradient everywhere), so reporting it would unfairly penalize every reconstructor/controller for something no SH-WFS-based system can measure. This is standard AO convention.
+- **Modal matrix gradient leakage fixed** — `build_modal_matrix` previously took `np.gradient` of a hard-masked Zernike basis, creating spurious cross-talk between rotationally-symmetric modes (piston-defocus correlation 0.63, should be 0.0). Fixed by nearest-neighbour extension before differentiating. This was the root cause of MMSE appearing ~6.7× worse than SVD.
+- **Centroiding noise formula corrected** — `compute_centroiding_error` previously had a flux-independent noise floor; now correctly scales as $1/\sqrt{N_\text{photons}}$, matching standard SH-WFS centroiding noise theory.
+
+---
+
+
 
 ```
 shwfs-ao-pipeline/
@@ -209,7 +221,7 @@ For spot intensity $I(x,y)$ after background subtraction $I' = \max(I - B, 0)$:
 
 $$c_x = \frac{\sum_{r,c} I'(r,c)\cdot c}{\sum_{r,c} I'(r,c)}, \qquad c_y = \frac{\sum_{r,c} I'(r,c)\cdot r}{\sum_{r,c} I'(r,c)}$$
 
-Background $B$ is estimated from border-ring pixel mean. Pixels below $\sigma_T \cdot |B|$ are zeroed before summation.
+Background $B_\mu$ and $B_\sigma$ are estimated from the border-ring pixel mean and standard deviation. Pixels below $\sigma_T \cdot B_\sigma$ are zeroed before summation — threshold scales with noise level, not background brightness.
 
 **Weighted CoG** uses a Gaussian weight $w(r,c)$ centred on the brightest pixel:
 
