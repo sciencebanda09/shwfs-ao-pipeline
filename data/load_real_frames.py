@@ -155,7 +155,24 @@ class RealSHWFSLoader:
         self.centroiding_method = noise_cfg.get("centroiding_method", "cog")
 
         self.pixel_size_m = pixel_size_m or (self.pitch_m / self.pix_per_sub)
-        self.px_to_rad = self.pixel_size_m / self.focal_length_m
+
+        # px_to_rad converts centroid displacement (subaperture pixels) to slope
+        # in the same units as SHWFSSensor.propagate() — i.e. rad per full-phase-
+        # grid index.  propagate() calls np.gradient on the (N x N) phase screen,
+        # so its slopes are in rad / (D/N) meters = rad * (N/D) per meter.
+        # simulate_spot_image() shifts a spot by slope * pix_per_sub / (2*pi)
+        # subaperture pixels for a slope in rad/subaperture-pixel.  Converting:
+        #   slope [rad/full-grid-index] = slope [rad/sub-px] * (sub-px-m / grid-px-m)
+        #                               = slope [rad/sub-px] * pitch_m*N / (pix_per_sub*D_m)
+        # and slope [rad/sub-px] = centroid_disp_px * 2*pi / pix_per_sub
+        # => px_to_rad = (2*pi / pps) * pitch_m * N / (pps * D_m)
+        #              = 2*pi * pitch_m * N / (pps^2 * D_m)
+        N_grid = sim_cfg.get("grid_size", self.n_sub * self.pix_per_sub)
+        D_m    = sim_cfg.get("aperture_diameter_m", self.pitch_m * self.n_sub)
+        self.px_to_rad = (
+            2.0 * np.pi * self.pitch_m * N_grid
+            / (self.pix_per_sub ** 2 * D_m)
+        )
 
         self.bmp_dir = Path(bmp_dir)
         self.reference_frame_path = reference_frame_path
