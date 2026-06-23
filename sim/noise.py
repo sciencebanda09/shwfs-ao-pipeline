@@ -144,7 +144,7 @@ def compute_centroiding_error(
     Analytical centroid measurement error (pixels), following the
     standard SH-WFS centroiding noise formula:
 
-    sigma_c = (pi/2) * sigma_det * sqrt(sigma_PSF^2 + sigma_readout^2 / N_photons)
+    sigma_c = (pi/2) * sigma_det * sqrt(sigma_PSF^2 / N_photons + sigma_readout^2 / N_photons^2)
 
     where sigma_det is the detector pixel scale contribution (taken as
     1 pixel) and sigma_PSF is derived from the spot FWHM.
@@ -168,7 +168,7 @@ def compute_centroiding_error(
     if n_photons <= 0:
         n_photons = 1e-6
     sigma_c = (np.pi / 2.0) * sigma_det * np.sqrt(
-        sigma_psf ** 2 + (readout_noise ** 2) / n_photons
+        (sigma_psf ** 2) / n_photons + (readout_noise ** 2) / (n_photons ** 2)
     )
     return float(sigma_c)
 

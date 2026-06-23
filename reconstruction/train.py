@@ -40,7 +40,7 @@ from sim.dataset_gen import SHWFSDataset
 def _augment_slopes_with_noise(
     slopes: torch.Tensor,
     flux_range: tuple[float, float] = (200.0, 2000.0),
-    rn_range: tuple[float, float] = (1.0, 6.0),
+    rn_range: tuple[float, float] = (1.0, 20.0),
 ) -> torch.Tensor:
     """
     Inject randomized photon + readout noise onto slope tensors.
