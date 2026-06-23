@@ -71,6 +71,8 @@ CNN/UNet delivers **3.6× lower RMS WFE** vs classical SVD. RMS WFE is reported 
 
 Integrator outperforms LQG here because the LQG controller is tuned conservatively (AR(1) state model, fixed process noise). All RMS WFE values piston-excluded per standard AO convention.
 
+Integrator outperforms LQG here because the LQG controller is tuned conservatively (AR(1) state model, fixed process noise). All RMS WFE values piston-excluded per standard AO convention.
+
 ### Speed (10×10 subapertures)
 
 | Step | Method | Latency |
